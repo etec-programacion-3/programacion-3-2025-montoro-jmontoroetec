@@ -1,22 +1,24 @@
 // src/index.ts
 import express from "express";
 import dotenv from "dotenv";
-import { PrismaClient } from "@prisma/client";
+import prisma from "./prisma";
 
-// Cargar variables de entorno desde .env
+// rutas nuevas
+import authRouter from "./routes/auth";
+import usersRouter from "./routes/users";
+
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
 
 app.use(express.json());
 
-// RUTA DE PRUEBA
+// ruta base
 app.get("/", (req, res) => {
   res.send("Servidor funcionando ✅");
 });
 
-// RUTA PARA PROBAR CONEXIÓN A DB
+// tu endpoint actual que muestra todos los usuarios (puede quedarse)
 app.get("/users", async (req, res) => {
   try {
     const users = await prisma.user.findMany();
@@ -27,8 +29,11 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// LEVANTAR EL SERVIDOR
-const PORT = process.env.PORT || 3000;
+// montamos los routers
+app.use("/api/auth", authRouter);
+app.use("/api/users", usersRouter);
+
+const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });

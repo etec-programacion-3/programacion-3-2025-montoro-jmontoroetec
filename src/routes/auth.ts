@@ -1,56 +1,102 @@
+// src/routes/auth.ts
 import { Router } from "express";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
 
 const router = Router();
 const prisma = new PrismaClient();
 
+// Variables de entorno
 const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
 const SALT_ROUNDS = 10;
 
-// POST /api/auth/register
+// ----------------------
+// Registro de usuario
+// ----------------------
 router.post("/register", async (req, res) => {
   try {
-    const { email, password, nombre, apellido } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email y password requeridos" });
+    const { email, password } = req.body;
 
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(409).json({ error: "Email ya registrado" });
+    // Verificar si ya existe
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: "El usuario ya existe" });
+    }
 
-    const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+    // Hashear contraseña
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
+    // Crear usuario
     const user = await prisma.user.create({
-      data: { email, password_hash, nombre, apellido },
-      select: { id: true, email: true, nombre: true, apellido: true, fecha_creacion: true }
+      data: { email, password: hashedPassword },
     });
 
-    return res.status(201).json({ message: "Usuario creado", user });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Error registrando usuario" });
+    res.json({ message: "Usuario registrado con éxito", user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al registrar usuario" });
   }
 });
 
-// POST /api/auth/login
+// ----------------------
+// Login de usuario
+// ----------------------
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email y password requeridos" });
 
+    // Buscar usuario
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
+    if (!user) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: "Credenciales inválidas" });
+    // Comparar contraseñas
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    // Crear token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
-    return res.json({ token, expiresIn: JWT_EXPIRES_IN });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Error en login" });
+    res.json({ message: "Login exitoso", token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error en el login" });
+  }
+});
+
+// ----------------------
+// Ruta protegida de ejemplo
+// ----------------------
+router.get("/me", async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Token no proporcionado" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, createdAt: true },
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(401).json({ error: "Token inválido o expirado" });
   }
 });
 

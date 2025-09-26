@@ -1,10 +1,11 @@
+// src/routes/users.ts
 import { Router } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../prisma";
 import { authMiddleware } from "../middleware/auth";
 
 const router = Router();
-const prisma = new PrismaClient();
 
+// GET /api/users/me
 router.get("/me", authMiddleware, async (req, res) => {
   try {
     const userPayload = (req as any).user;
