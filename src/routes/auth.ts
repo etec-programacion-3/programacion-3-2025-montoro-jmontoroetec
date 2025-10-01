@@ -1,102 +1,83 @@
-// src/routes/auth.ts
-import { Router } from "express";
-import { PrismaClient } from "@prisma/client";
+import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import * as jwt from "jsonwebtoken";
+import prisma from "../prisma.js"; 
 
 const router = Router();
-const prisma = new PrismaClient();
 
-// Variables de entorno
-const JWT_SECRET = process.env.JWT_SECRET as string;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
+const JWT_SECRET = (process.env.JWT_SECRET ?? "dev_secret") as jwt.Secret;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? "1h";
 const SALT_ROUNDS = 10;
 
-// ----------------------
-// Registro de usuario
-// ----------------------
-router.post("/register", async (req, res) => {
+router.post("/register", async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-
-    // Verificar si ya existe
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: "El usuario ya existe" });
+    const { email, password, nombre, apellido } = req.body;
+    if (!email || !password || !nombre || !apellido) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
     }
 
-    // Hashear contraseña
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+    const exists = await prisma.user.findUnique({ where: { email } });
+    if (exists) return res.status(409).json({ error: "El email ya está registrado" });
 
-    // Crear usuario
+    const password_hash = await bcrypt.hash(password, SALT_ROUNDS);
+
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword },
+      data: { email, password_hash, nombre, apellido },
+      select: { id: true, email: true, nombre: true, apellido: true, fecha_creacion: true },
     });
 
-    res.json({ message: "Usuario registrado con éxito", user });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error al registrar usuario" });
+    return res.status(201).json({ message: "Usuario registrado ✅", user });
+  } catch (err) {
+    console.error("Error en /register:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
-// ----------------------
-// Login de usuario
-// ----------------------
-router.post("/login", async (req, res) => {
+
+router.post("/login", async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Faltan credenciales" });
 
-    // Buscar usuario
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
-    }
+    if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    // Comparar contraseñas
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
-    }
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    // Crear token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    const payload = { userId: user.id, email: user.email };
+    const options: jwt.SignOptions = { expiresIn: 3600 }; // 👈 tipado claro
+    const token = jwt.sign(payload, JWT_SECRET, options);
 
-    res.json({ message: "Login exitoso", token });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error en el login" });
+    return res.json({ message: "Login exitoso ✅", token, expiresIn: JWT_EXPIRES_IN });
+  } catch (err) {
+    console.error("Error en /login:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
-// ----------------------
-// Ruta protegida de ejemplo
-// ----------------------
-router.get("/me", async (req, res) => {
-  const authHeader = req.headers.authorization;
 
-  if (!authHeader) {
-    return res.status(401).json({ error: "Token no proporcionado" });
+router.get("/me", async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: "Token no proporcionado" });
+
+  const [scheme, token] = authHeader.split(" ");
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Formato Authorization: Bearer <token>" });
   }
 
-  const token = authHeader.split(" ")[1];
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
-
-    const user = await prisma.user.findUnique({
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; email: string };
+    const me = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, createdAt: true },
+      select: { id: true, email: true, nombre: true, apellido: true, fecha_creacion: true },
     });
 
-    res.json(user);
-  } catch (error) {
-    console.error(error);
-    res.status(401).json({ error: "Token inválido o expirado" });
+    if (!me) return res.status(404).json({ error: "Usuario no encontrado" });
+    return res.json(me);
+  } catch (err) {
+    console.error("Error en /me:", err);
+    return res.status(401).json({ error: "Token inválido o expirado" });
   }
 });
 

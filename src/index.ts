@@ -1,11 +1,9 @@
-// src/index.ts
 import express from "express";
 import dotenv from "dotenv";
-import prisma from "./prisma";
+import prisma from "./prisma.js";
 
-// rutas nuevas
-import authRouter from "./routes/auth";
-import usersRouter from "./routes/users";
+import authRouter from "./routes/auth.js";
+import usersRouter from "./routes/users.js";
 
 dotenv.config();
 
@@ -13,12 +11,10 @@ const app = express();
 
 app.use(express.json());
 
-// ruta base
 app.get("/", (req, res) => {
   res.send("Servidor funcionando ✅");
 });
 
-// tu endpoint actual que muestra todos los usuarios (puede quedarse)
 app.get("/users", async (req, res) => {
   try {
     const users = await prisma.user.findMany();
@@ -29,7 +25,6 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// montamos los routers
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 

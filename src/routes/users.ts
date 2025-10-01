@@ -1,11 +1,9 @@
-// src/routes/users.ts
 import { Router } from "express";
 import prisma from "../prisma";
-import { authMiddleware } from "../middleware/auth";
+import { authMiddleware } from "../middleware/auth.js";
 
 const router = Router();
 
-// GET /api/users/me
 router.get("/me", authMiddleware, async (req, res) => {
   try {
     const userPayload = (req as any).user;
