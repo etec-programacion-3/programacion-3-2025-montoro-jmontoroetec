@@ -1,9 +1,9 @@
 import express from "express";
 import dotenv from "dotenv";
-import prisma from "./prisma.js";
+import prisma from "./prisma"
 
-import authRouter from "./routes/auth.js";
-import usersRouter from "./routes/users.js";
+import authRouter from "./routes/auth"
+import usersRouter from "./routes/users"
 
 dotenv.config();
 
