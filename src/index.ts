@@ -4,6 +4,8 @@ import prisma from "./prisma"
 
 import authRouter from "./routes/auth"
 import usersRouter from "./routes/users"
+import categoriesRouter from "./routes/categories";
+import productsRouter from "./routes/products";
 
 dotenv.config();
 
@@ -27,6 +29,8 @@ app.get("/users", async (req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
+app.use("/api/categories", categoriesRouter);
+app.use("/api/products", productsRouter);
 
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {

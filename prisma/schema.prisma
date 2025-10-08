@@ -8,10 +8,32 @@ datasource db {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
-  email          String   @unique
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
   password_hash  String
   nombre         String
   apellido       String
-  fecha_creacion DateTime @default(now())
+  fecha_creacion DateTime  @default(now())
+
+  // Relación: un usuario vende muchos productos
+  products       Product[]
+}
+
+model Product {
+  id             Int        @id @default(autoincrement())
+  nombre         String
+  descripcion    String
+  precio         Decimal    @db.Numeric(10, 2)  // 10 dígitos, 2 decimales
+  stock          Int        @default(0)
+  sellerId       Int
+  seller         User       @relation(fields: [sellerId], references: [id])
+  categories     Category[] // M:N
+  creado_en      DateTime   @default(now())
+  actualizado_en DateTime   @updatedAt
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  nombre   String    @unique
+  products Product[] // M:N
 }
