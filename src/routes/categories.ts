@@ -7,7 +7,6 @@ type CreateCategoryBody = {
   nombre?: string;
 };
 
-// POST /api/categories  { nombre }
 router.post("/", async (req: Request<unknown, unknown, CreateCategoryBody>, res: Response) => {
   const { nombre } = req.body || {};
   if (!nombre || typeof nombre !== "string") {
@@ -27,7 +26,6 @@ router.post("/", async (req: Request<unknown, unknown, CreateCategoryBody>, res:
   }
 });
 
-// GET /api/categories
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const cats = await prisma.category.findMany({ orderBy: { nombre: "asc" } });

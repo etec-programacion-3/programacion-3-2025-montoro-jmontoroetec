@@ -20,16 +20,12 @@ type UpdateProductBody = {
   categoryIds?: number[];
 };
 
-/** Helper para normalizar precio (Decimal en Prisma acepta string o number) */
 function normalizePrecio(p: unknown): string | undefined {
   if (typeof p === "number") return p.toString();
   if (typeof p === "string" && p.trim() !== "") return p;
   return undefined;
 }
 
-/** Crear producto (autenticado)
- * body: { nombre, descripcion, precio, stock?, categoryIds?: number[] }
- */
 router.post(
   "/",
   authMiddleware,
@@ -61,7 +57,7 @@ router.post(
         data: {
           nombre,
           descripcion,
-          precio: precioNorm, // Prisma lo persiste como Decimal
+          precio: precioNorm, 
           stock: typeof stock === "number" ? stock : 0,
           sellerId,
           categories: connectCats,
@@ -80,9 +76,6 @@ router.post(
   }
 );
 
-/** Listar productos (público) con paginación y filtro por categoría
- * GET /api/products?categoryId=1&page=1&pageSize=10
- */
 router.get("/", async (req: Request, res: Response) => {
   try {
     const page = Math.max(parseInt(String(req.query.page ?? "1"), 10) || 1, 1);
@@ -121,7 +114,6 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
-/** Ver producto por id (público) */
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
@@ -142,9 +134,6 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-/** Actualizar (solo dueño)
- * body: { nombre?, descripcion?, precio?, stock?, categoryIds?: number[] }
- */
 router.put(
   "/:id",
   authMiddleware,
@@ -171,7 +160,7 @@ router.put(
 
       if (Array.isArray(categoryIds)) {
         data.categories = {
-          set: [], // limpia vínculos
+          set: [], 
           connect: categoryIds.map((cid) => ({ id: cid })),
         };
       }
@@ -193,7 +182,6 @@ router.put(
   }
 );
 
-/** Borrar (solo dueño) */
 router.delete("/:id", authMiddleware, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
