@@ -6,6 +6,7 @@ import authRouter from "./routes/auth"
 import usersRouter from "./routes/users"
 import categoriesRouter from "./routes/categories";
 import productsRouter from "./routes/products";
+import conversationsRouter from "./routes/conversations";
 
 dotenv.config();
 
@@ -31,7 +32,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/categories", categoriesRouter);
 app.use("/api/products", productsRouter);
-
+app.use("/api/conversations", conversationsRouter);
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
