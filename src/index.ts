@@ -7,6 +7,8 @@ import usersRouter from "./routes/users"
 import categoriesRouter from "./routes/categories";
 import productsRouter from "./routes/products";
 import conversationsRouter from "./routes/conversations";
+import cors from "cors";
+
 
 dotenv.config();
 
@@ -27,6 +29,12 @@ app.get("/users", async (req, res) => {
     res.status(500).json({ error: "Error al obtener usuarios" });
   }
 });
+
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true,
+}));
+
 
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
