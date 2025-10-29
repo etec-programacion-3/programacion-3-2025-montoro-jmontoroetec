@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import type { Product } from "../types";
 
 type Props = { product: Product };
@@ -20,7 +21,16 @@ const ProductCard = ({ product }: Props) => {
         gap: 8,
       }}
     >
-      <h3 style={{ margin: 0 }}>{product.nombre}</h3>
+      {/* 🔗 título clickeable que navega al detalle */}
+      <h3 style={{ margin: 0 }}>
+        <Link
+          to={`/products/${product.id}`}
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
+          {product.nombre}
+        </Link>
+      </h3>
+
       <p style={{ margin: 0, color: "#4b5563" }}>{product.descripcion}</p>
 
       <div style={{ marginTop: "auto" }}>
@@ -46,6 +56,7 @@ const ProductCard = ({ product }: Props) => {
                 background: "#f3f4f6",
                 padding: "2px 8px",
                 borderRadius: 999,
+                fontSize: 12,
               }}
             >
               {c.nombre}
