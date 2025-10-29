@@ -31,3 +31,17 @@ export async function fetchProducts(params?: {
 
   return meta ? { items, meta } : items;
 }
+
+export async function fetchProductById(id: number) {
+  const { data } = await api.get(`/api/products/${id}`);
+  return data;
+}
+
+export async function startConversation(otherUserId: number, token: string) {
+  const { data } = await api.post(
+    "/api/conversations",
+    { otherUserId },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return data; 
+}
