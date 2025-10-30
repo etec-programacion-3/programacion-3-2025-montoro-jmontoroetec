@@ -7,6 +7,7 @@ import type { Product } from "../types";
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const productId = Number(id);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
@@ -20,39 +21,42 @@ export default function ProductDetail() {
         setError(null);
         const data = await fetchProductById(productId);
         if (mounted) setProduct(data);
-      } catch (err: any) {
+      } catch (err) {
         console.error(err);
         if (mounted) setError("No se pudo cargar el producto");
       } finally {
         if (mounted) setLoading(false);
       }
     })();
-    return () => { mounted = false; };
+
+    return () => {
+      mounted = false;
+    };
   }, [productId]);
 
   async function handleContactSeller() {
     const token = getToken();
     if (!token) {
       alert("Para contactar al vendedor, iniciá sesión.");
-      // si tenés una ruta /login podés redirigir:
-      // navigate("/login");
       return;
     }
-    if (!product?.seller?.id) {
+    if (!product) return;
+
+    const sellerId = (product as any).sellerId ?? product.seller?.id;
+    if (!sellerId) {
       alert("No se encontró el vendedor del producto.");
       return;
     }
+
     try {
       setContacting(true);
-      const resp = await startConversation(product.seller.id, token);
-      // resp: { conversation, existing }
+      const resp = await startConversation(Number(sellerId));
       alert(
         resp?.existing
           ? "Ya tenías una conversación con este vendedor. (Abrir chat aquí)"
           : "Conversación creada. (Abrir chat aquí)"
       );
-      // Futuro: navigate(`/conversations/${resp.conversation.id}`)
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       alert("No se pudo iniciar la conversación");
     } finally {
@@ -82,14 +86,24 @@ export default function ProductDetail() {
       </div>
 
       {product.categories?.length ? (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "8px 0 16px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            margin: "8px 0 16px",
+          }}
+        >
           {product.categories.map((c) => (
-            <span key={c.id} style={{
-              background: "#f3f4f6",
-              padding: "2px 8px",
-              borderRadius: 999,
-              fontSize: 12
-            }}>
+            <span
+              key={c.id}
+              style={{
+                background: "#f3f4f6",
+                padding: "2px 8px",
+                borderRadius: 999,
+                fontSize: 12,
+              }}
+            >
               {c.nombre}
             </span>
           ))}
@@ -97,8 +111,10 @@ export default function ProductDetail() {
       ) : null}
 
       <div style={{ margin: "8px 0 24px", fontSize: 14 }}>
-        Vendedor: <strong>{product.seller?.nombre} {product.seller?.apellido}</strong>
-        {" "}
+        Vendedor:{" "}
+        <strong>
+          {product.seller?.nombre} {product.seller?.apellido}
+        </strong>{" "}
         ({product.seller?.email})
       </div>
 
@@ -111,7 +127,7 @@ export default function ProductDetail() {
           border: 0,
           borderRadius: 8,
           padding: "10px 16px",
-          cursor: "pointer"
+          cursor: "pointer",
         }}
       >
         {contacting ? "Contactando…" : "Contactar al vendedor"}
