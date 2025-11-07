@@ -1,34 +1,60 @@
-const STORAGE_KEY = "token";
+export type AuthUser = {
+  id: number;
+  email: string;
+  nombre?: string | null;
+  apellido?: string | null;
+};
 
+export type LoginPayload = { email: string; password: string };
+export type RegisterPayload = {
+  email: string;
+  password: string;
+  nombre?: string;
+  apellido?: string;
+};
+
+const LS_TOKEN_KEY = "token";
+const LS_USER_KEY = "authUser";
+
+export function setToken(token: string) {
+  localStorage.setItem(LS_TOKEN_KEY, token);
+}
 export function getToken(): string | null {
+  return localStorage.getItem(LS_TOKEN_KEY);
+}
+export function clearToken() {
+  localStorage.removeItem(LS_TOKEN_KEY);
+}
+export function setStoredUser(u: AuthUser | null) {
+  if (!u) localStorage.removeItem(LS_USER_KEY);
+  else localStorage.setItem(LS_USER_KEY, JSON.stringify(u));
+}
+export function getStoredUser(): AuthUser | null {
+  const raw = localStorage.getItem(LS_USER_KEY);
   try {
-    return localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
   }
 }
-export function setToken(t: string) {
-  localStorage.setItem(STORAGE_KEY, t);
-}
-export function clearToken() {
-  localStorage.removeItem(STORAGE_KEY);
+
+export async function apiLogin(payload: LoginPayload) {
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Credenciales inválidas");
+  return (await res.json()) as { token: string; user: AuthUser };
 }
 
-import { api } from "./client";
-
-export async function login(email: string, password: string) {
-  const { data } = await api.post("/api/auth/login", { email, password });
-  return data as { token: string; user: any };
+export async function apiRegister(payload: RegisterPayload) {
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("No se pudo registrar");
+  return (await res.json()) as { token: string; user: AuthUser };
 }
 
-export async function registerUser(payload: {
-  nombre: string; apellido: string; email: string; password: string;
-}) {
-  const { data } = await api.post("/api/auth/register", payload);
-  return data as { token: string; user: any };
-}
-
-export async function me() {
-  const { data } = await api.get("/api/auth/me");
-  return data; 
-}

@@ -1,49 +1,43 @@
-// frontend/src/context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { clearToken, getToken, setToken, login as apiLogin, registerUser, me } from "../api/auth";
+import {
+  apiLogin,
+  apiRegister,
+  clearToken,
+  getStoredUser,
+  setStoredUser,
+  setToken,
+  type AuthUser,
+  type LoginPayload,
+  type RegisterPayload,
+} from "../api/auth";
 
-type User = {
-  id: number;
-  email: string;
-  nombre?: string;
-  apellido?: string;
-};
-
-type AuthContextType = {
-  user: User | null;
+type AuthContextValue = {
+  user: AuthUser | null;
+  token: string | null;
   loading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (payload: { nombre: string; apellido: string; email: string; password: string; }) => Promise<void>;
+  login: (p: LoginPayload) => Promise<void>;
+  register: (p: RegisterPayload) => Promise<void>;
   logout: () => void;
 };
 
-const AuthContext = createContext<AuthContextType>({} as any);
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(getStoredUser());
+  const [token, setTok] = useState<string | null>(localStorage.getItem("token"));
+  const [loading, setLoading] = useState(false);
 
-  // Al iniciar, si hay token, cargo el perfil
   useEffect(() => {
-    (async () => {
-      const token = getToken();
-      if (!token) { setLoading(false); return; }
-      try {
-        const u = await me();
-        setUser(u);
-      } catch {
-        clearToken();
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    // persistencia
+    if (user) setStoredUser(user);
+    else setStoredUser(null);
+  }, [user]);
 
-  async function login(email: string, password: string) {
+  async function login(payload: LoginPayload) {
     setLoading(true);
     try {
-      const { token, user } = await apiLogin(email, password);
+      const { token, user } = await apiLogin(payload);
+      setTok(token);
       setToken(token);
       setUser(user);
     } finally {
@@ -51,10 +45,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  async function register(payload: { nombre: string; apellido: string; email: string; password: string; }) {
+  async function register(payload: RegisterPayload) {
     setLoading(true);
     try {
-      const { token, user } = await registerUser(payload);
+      const { token, user } = await apiRegister(payload);
+      setTok(token);
       setToken(token);
       setUser(user);
     } finally {
@@ -64,25 +59,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   function logout() {
     clearToken();
+    setTok(null);
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        isAuthenticated: !!user,
-        login,
-        register,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth debe usarse dentro de <AuthProvider/>");
+  return ctx;
 }
