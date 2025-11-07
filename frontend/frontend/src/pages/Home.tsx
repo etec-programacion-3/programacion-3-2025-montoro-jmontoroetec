@@ -1,8 +1,7 @@
-// frontend/frontend/src/pages/Home.tsx
 import { useEffect, useState } from "react";
 import ProductCard from "../components/ProductCard";
 import { fetchProducts } from "../api/client";
-import type { Product, PagedProducts } from "../types";
+import type { Product } from "../types";
 
 export default function Home() {
   const [loading, setLoading] = useState(true);
@@ -11,29 +10,24 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
-    console.log("[Home] baseURL:", import.meta.env.VITE_API_BASE_URL);
-
-    async function load() {
-      setLoading(true);
-      setError(null);
+    (async () => {
       try {
-        console.log("[Home] llamando fetchProducts...");
+        setLoading(true);
+        setError(null);
         const data = await fetchProducts({ page: 1, pageSize: 12 });
-        console.log("[Home] data recibida:", data);
+
         const items = Array.isArray(data)
           ? data
-          : (data as PagedProducts)?.items ?? [];
+          : (data?.items ?? data?.data ?? []); 
 
-        if (mounted) setProducts(items);
+        if (mounted) setProducts(items ?? []);
       } catch (err) {
-        console.error("[Home] error en fetch:", err);
-        if (mounted) setError("Error al cargar productos");
+        console.error(err);
+        if (mounted) setError("No se pudieron cargar los productos");
       } finally {
         if (mounted) setLoading(false);
       }
-    }
-
-    load();
+    })();
     return () => { mounted = false; };
   }, []);
 
@@ -45,7 +39,7 @@ export default function Home() {
     <div style={{
       display: "grid",
       gap: 16,
-      gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+      gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
       padding: 24,
     }}>
       {products.map(p => <ProductCard key={p.id} product={p} />)}
