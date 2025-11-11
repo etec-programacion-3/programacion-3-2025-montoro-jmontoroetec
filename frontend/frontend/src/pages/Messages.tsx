@@ -1,306 +1,296 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { listConversations, getMessages, sendMessage } from "../api/client";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import {
+  getConversations,
+  getMessages,
+  sendMessage,
+} from "../api/client";
 import type { Conversation, Message, Paged } from "../types";
 
-export default function MessagesPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selected, setSelected] = useState<Conversation | null>(null);
+export default function Messages() {
+  const { user } = useAuth();
 
-  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [text, setText] = useState("");
+  const [loadingConvs, setLoadingConvs] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState("");
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const pollingRef = useRef<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+
+    async function loadConvs() {
       try {
         setLoadingConvs(true);
         setError(null);
-        const convs = await listConversations();
-        if (!alive) return;
-        setConversations(convs);
-        if (convs.length && !selected) setSelected(convs[0]);
-      } catch (e: any) {
-        if (!alive) return;
-        setError("No se pudieron cargar las conversaciones");
-        console.error(e);
+        const data = await getConversations();
+        const items = Array.isArray(data)
+          ? (data as Conversation[])
+          : (data as Paged<Conversation>).items ?? [];
+        if (alive) setConversations(items);
+      } catch (err) {
+        console.error(err);
+        if (alive) setError("No se pudieron cargar las conversaciones");
       } finally {
-        if (!alive) return;
-        setLoadingConvs(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!selected) return;
-
-    let alive = true;
-
-    async function loadMsgs() {
-      try {
-        setLoadingMsgs(true);
-        setError(null);
-        const data = await getMessages(selected.id, 1, 50);
-        if (!alive) return;
-        const items = Array.isArray(data) ? data : (data as Paged<Message>).items ?? [];
-        setMessages(items);
-        scrollToBottom();
-      } catch (e: any) {
-        if (!alive) return;
-        setError("No se pudieron cargar los mensajes");
-        console.error(e);
-      } finally {
-        if (!alive) return;
-        setLoadingMsgs(false);
+        if (alive) setLoadingConvs(false);
       }
     }
 
-    function startPolling() {
-      stopPolling();
-      pollingRef.current = window.setInterval(async () => {
-        try {
-          const data = await getMessages(selected.id, 1, 50);
-          const items = Array.isArray(data) ? data : (data as Paged<Message>).items ?? [];
-
-          setMessages((prev) => {
-            const prevLast = prev[prev.length - 1]?.id;
-            const newLast = items[items.length - 1]?.id;
-            if (prevLast !== newLast) {
-              return items;
-            }
-            return prev;
-          });
-        } catch (e) {
-          console.error("Polling error", e);
-        }
-      }, 3000); 
-    }
-
-    function stopPolling() {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    }
-
-    (async () => {
-      await loadMsgs();
-      startPolling();
-    })();
-
+    loadConvs();
     return () => {
       alive = false;
-      stopPolling();
     };
-  }, [selected?.id]);
+  }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages.length]);
-
+  // ----- scroll al final -----
   function scrollToBottom() {
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (!listRef.current) return;
+    listRef.current.scrollTop = listRef.current.scrollHeight;
   }
 
+  // ----- cargar mensajes de una conversación -----
+  async function loadMessagesFor(conversationId: number) {
+    let alive = true;
+    try {
+      setLoadingMsgs(true);
+      setError(null);
+      const data = await getMessages(conversationId, 1, 50);
+      const items = Array.isArray(data)
+        ? (data as Message[])
+        : (data as Paged<Message>).items ?? [];
+      // marcar isMine
+      const myId = user?.id;
+      const decorated = items.map((m) => ({
+        ...m,
+        isMine: myId != null && m.senderId === myId,
+      }));
+      if (alive) setMessages(decorated);
+      scrollToBottom();
+    } catch (err) {
+      console.error(err);
+      if (alive) setError("No se pudieron cargar los mensajes");
+    } finally {
+      if (alive) setLoadingMsgs(false);
+    }
+    return () => {
+      alive = false;
+    };
+  }
+
+  // ----- polling -----
+  function stopPolling() {
+    if (pollingRef.current != null) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }
+
+  function startPolling(conversationId: number) {
+    stopPolling();
+    pollingRef.current = window.setInterval(async () => {
+      try {
+        const data = await getMessages(conversationId, 1, 50);
+        const items = Array.isArray(data)
+          ? (data as Message[])
+          : (data as Paged<Message>).items ?? [];
+        const myId = user?.id;
+        const decorated = items.map((m) => ({
+          ...m,
+          isMine: myId != null && m.senderId === myId,
+        }));
+        setMessages(decorated);
+        scrollToBottom();
+      } catch (err) {
+        console.error("Error en polling de mensajes", err);
+      }
+    }, 4000); // cada 4 segundos
+  }
+
+  // ----- cuando cambia selectedId -----
+  useEffect(() => {
+    if (selectedId == null) {
+      setMessages([]);
+      stopPolling();
+      return;
+    }
+    loadMessagesFor(selectedId);
+    startPolling(selectedId);
+    return () => {
+      stopPolling();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  // ----- enviar mensaje -----
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected || !text.trim()) return;
+    if (!text.trim()) return;
+    if (selectedId == null) return;
 
-    const tempId = Math.random() * 1e9;
-    const optimistic: Message = {
-      id: tempId,
-      conversationId: selected.id,
-      senderId: -1, 
-      content: text.trim(),
+    const tmp: Message = {
+      id: Date.now(),
+      conversationId: selectedId,
+      senderId: user?.id ?? 0,
+      content: text,
       createdAt: new Date().toISOString(),
+      isMine: true,
     };
 
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev) => [...prev, tmp]);
     setText("");
     scrollToBottom();
 
     try {
-      const saved = await sendMessage(selected.id, optimistic.content);
+      const saved = await sendMessage(selectedId, tmp.content);
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? saved : m))
+        prev.map((m) => (m.id === tmp.id ? { ...saved, isMine: true } : m))
       );
-    } catch (e) {
-      console.error(e);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      alert("No se pudo enviar el mensaje");
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo enviar el mensaje");
+      // opcional: deshacer el mensaje optimista
     }
   }
 
-  const otherName = useMemo(() => {
-    if (!selected) return "";
-    const first = selected.participants?.[0];
-    const second = selected.participants?.[1];
-    const u =
-      (first?.user?.nombre || "") +
-      " " +
-      (first?.user?.apellido || "");
-    const v =
-      (second?.user?.nombre || "") +
-      " " +
-      (second?.user?.apellido || "");
-    return [u.trim(), v.trim()].filter(Boolean).join(" / ");
-  }, [selected]);
-
+  // ----- render -----
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 64px)" }}>
-      {/* Sidebar conversaciones */}
+    <div style={{ display: "flex", height: "calc(100vh - 60px)" }}>
+      {/* Lista de conversaciones */}
       <aside
         style={{
-          width: 320,
+          width: 280,
           borderRight: "1px solid #e5e7eb",
-          overflow: "auto",
+          padding: 16,
+          overflowY: "auto",
         }}
       >
-        <div style={{ padding: 16, borderBottom: "1px solid #e5e7eb" }}>
-          <strong>Mis conversaciones</strong>
-        </div>
-
-        {loadingConvs ? (
-          <div style={{ padding: 16 }}>Cargando…</div>
-        ) : error ? (
-          <div style={{ padding: 16, color: "crimson" }}>{error}</div>
-        ) : conversations.length === 0 ? (
-          <div style={{ padding: 16 }}>No tenés conversaciones aún.</div>
-        ) : (
-          conversations.map((c) => {
-            const last = c.messages?.[c.messages.length - 1];
-            return (
-              <button
-                key={c.id}
-                onClick={() => setSelected(c)}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "12px 16px",
-                  border: 0,
-                  background: selected?.id === c.id ? "#eef2ff" : "transparent",
-                  borderBottom: "1px solid #f3f4f6",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontWeight: 600 }}>
-                  Conversación #{c.id}
-                </div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {last ? `${last.sender?.nombre ?? ""}: ${last.content}` : "—"}
-                </div>
-              </button>
-            );
-          })
+        <h2 style={{ marginTop: 0 }}>Conversaciones</h2>
+        {loadingConvs && <div>Cargando conversaciones…</div>}
+        {error && (
+          <div style={{ color: "crimson", marginBottom: 8 }}>{error}</div>
         )}
+
+        {conversations.map((c) => (
+          <div
+            key={c.id}
+            onClick={() => setSelectedId(c.id)}
+            style={{
+              padding: 8,
+              marginBottom: 8,
+              borderRadius: 8,
+              cursor: "pointer",
+              background: c.id === selectedId ? "#e5e7eb" : "transparent",
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>
+              {c.otherUser?.nombre} {c.otherUser?.apellido}
+            </div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              {c.lastMessage?.content || "Sin mensajes aún"}
+            </div>
+          </div>
+        ))}
       </aside>
 
-      {/* Panel de chat */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {/* Header */}
+      {/* Panel de mensajes */}
+      <section style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <div
           style={{
-            height: 56,
-            borderBottom: "1px solid #e5e7eb",
-            display: "flex",
-            alignItems: "center",
-            padding: "0 16px",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ fontWeight: 600 }}>
-            {selected ? `Chat con: ${otherName || "Participantes"}` : "Chat"}
-          </div>
-        </div>
-
-        {/* Mensajes */}
-        <div
-          ref={containerRef}
-          style={{
-            flex: 1,
             padding: 16,
-            overflow: "auto",
-            background: "#f9fafb",
+            borderBottom: "1px solid #e5e7eb",
+            minHeight: 56,
           }}
         >
-          {!selected ? (
-            <div>Elegí una conversación del panel izquierdo.</div>
-          ) : loadingMsgs ? (
-            <div>Cargando mensajes…</div>
-          ) : messages.length === 0 ? (
-            <div>Sin mensajes todavía.</div>
+          {selectedId == null ? (
+            <strong>Seleccioná una conversación</strong>
           ) : (
-            messages.map((m) => (
-              <div key={m.id} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {m.sender?.nombre ?? "Usuario"}{" "}
-                  {new Date(m.createdAt).toLocaleString()}
-                </div>
-                <div
-                  style={{
-                    background: "#fff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    padding: 8,
-                    display: "inline-block",
-                    maxWidth: "70%",
-                  }}
-                >
-                  {m.content}
-                </div>
-              </div>
-            ))
+            <strong>
+              Conversación #{selectedId}
+            </strong>
           )}
         </div>
 
-        {/* Input de envío */}
-        <form
-          onSubmit={handleSend}
+        <div
+          ref={listRef}
           style={{
-            padding: 12,
-            borderTop: "1px solid #e5e7eb",
+            flex: 1,
+            padding: 16,
+            overflowY: "auto",
             display: "flex",
+            flexDirection: "column",
             gap: 8,
           }}
         >
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Escribí un mensaje…"
+          {loadingMsgs && <div>Cargando mensajes…</div>}
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              style={{
+                display: "flex",
+                justifyContent: m.isMine ? "flex-end" : "flex-start",
+              }}
+            >
+              <div
+                style={{
+                  background: m.isMine ? "#2563eb" : "#e5e7eb",
+                  color: m.isMine ? "#fff" : "#111827",
+                  padding: "6px 10px",
+                  borderRadius: 12,
+                  maxWidth: "70%",
+                  fontSize: 14,
+                }}
+              >
+                {m.content}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Formulario de envío */}
+        {selectedId != null && (
+          <form
+            onSubmit={handleSend}
             style={{
-              flex: 1,
-              border: "1px solid #e5e7eb",
-              borderRadius: 8,
-              padding: "10px 12px",
-              outline: "none",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={!selected || !text.trim()}
-            style={{
-              background: "#2563eb",
-              color: "#fff",
-              border: 0,
-              borderRadius: 8,
-              padding: "10px 16px",
-              cursor: "pointer",
+              padding: 12,
+              borderTop: "1px solid #e5e7eb",
+              display: "flex",
+              gap: 8,
             }}
           >
-            Enviar
-          </button>
-        </form>
-      </main>
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Escribí tu mensaje…"
+              style={{
+                flex: 1,
+                padding: 8,
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={!text.trim()}
+              style={{
+                background: "#2563eb",
+                color: "#fff",
+                border: 0,
+                borderRadius: 8,
+                padding: "0 16px",
+                cursor: "pointer",
+              }}
+            >
+              Enviar
+            </button>
+          </form>
+        )}
+      </section>
     </div>
   );
 }
