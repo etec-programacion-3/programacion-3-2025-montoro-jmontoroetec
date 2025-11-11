@@ -1,32 +1,51 @@
+// frontend/frontend/src/App.tsx
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import Home from "./pages/Home";
-import ProductDetail from "./pages/ProductDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import Messages from "./pages/Messages";
+import ProductDetail from "./pages/ProductDetail";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
 
 export default function App() {
+  const { isAuthenticated, logout } = useAuth();
+
   return (
     <>
-      {/* Nav mínimo para moverte mientras probás */}
-      <nav style={{ padding: 12, borderBottom: "1px solid #eee" }}>
-        <Link to="/" style={{ marginRight: 12 }}>Inicio</Link>
-        <Link to="/messages" style={{ marginRight: 12 }}>Mensajes</Link>
-        <Link to="/profile" style={{ marginRight: 12 }}>Perfil</Link>
-        <Link to="/login" style={{ marginRight: 12 }}>Login</Link>
-        <Link to="/register">Registro</Link>
+      {/* Barra de navegación simple */}
+      <nav
+        style={{
+          display: "flex",
+          gap: 16,
+          padding: 12,
+          borderBottom: "1px solid #ddd",
+        }}
+      >
+        <Link to="/">Inicio</Link>
+        <Link to="/messages">Mensajes</Link>
+        <Link to="/profile">Perfil</Link>
+
+        <span style={{ flex: 1 }} />
+
+        {isAuthenticated ? (
+          <button onClick={logout}>Salir</button>
+        ) : (
+          <>
+            <Link to="/login">Login</Link>
+            <Link to="/register">Registro</Link>
+          </>
+        )}
       </nav>
 
+      {/* Rutas */}
       <Routes>
-        {/* Públicas */}
         <Route path="/" element={<Home />} />
-        <Route path="/products/:id" element={<ProductDetail />} />
+
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Protegidas */}
         <Route
           path="/profile"
           element={
@@ -35,6 +54,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/messages"
           element={
@@ -44,9 +64,13 @@ export default function App() {
           }
         />
 
-        {/* Redir / 404 */}
-        <Route path="/home" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<div style={{ padding: 24 }}>404</div>} />
+        <Route path="/products/:id" element={<ProductDetail />} />
+
+        {/* 404 simple */}
+        <Route
+          path="*"
+          element={<div style={{ padding: 24 }}>404 - Página no encontrada</div>}
+        />
       </Routes>
     </>
   );

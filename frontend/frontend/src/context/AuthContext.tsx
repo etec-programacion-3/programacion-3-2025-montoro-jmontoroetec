@@ -1,77 +1,91 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+// frontend/frontend/src/context/AuthContext.tsx
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   apiLogin,
   apiRegister,
-  clearToken,
-  getStoredUser,
-  setStoredUser,
-  setToken,
   type AuthUser,
   type LoginPayload,
   type RegisterPayload,
+  getStoredUser,
+  setStoredUser,
+  setToken,
+  clearToken,
 } from "../api/auth";
 
-type AuthContextValue = {
+export interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
   loading: boolean;
-  login: (p: LoginPayload) => Promise<void>;
-  register: (p: RegisterPayload) => Promise<void>;
+  isAuthenticated: boolean;
+  login: (payload: LoginPayload) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
-};
+}
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(getStoredUser());
-  const [token, setTok] = useState<string | null>(localStorage.getItem("token"));
-  const [loading, setLoading] = useState(false);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // leer usuario almacenado al inicio
   useEffect(() => {
-    // persistencia
-    if (user) setStoredUser(user);
-    else setStoredUser(null);
-  }, [user]);
+    const stored = getStoredUser();
+    if (stored) {
+      setUser(stored);
+    }
+    setLoading(false);
+  }, []);
 
-  async function login(payload: LoginPayload) {
+  const login = async (payload: LoginPayload) => {
     setLoading(true);
     try {
       const { token, user } = await apiLogin(payload);
-      setTok(token);
       setToken(token);
+      setStoredUser(user);
       setUser(user);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function register(payload: RegisterPayload) {
+  const register = async (payload: RegisterPayload) => {
     setLoading(true);
     try {
       const { token, user } = await apiRegister(payload);
-      setTok(token);
       setToken(token);
+      setStoredUser(user);
       setUser(user);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  function logout() {
+  const logout = () => {
     clearToken();
-    setTok(null);
+    setStoredUser(null);
     setUser(null);
-  }
+  };
 
-  return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value: AuthContextValue = {
+    user,
+    loading,
+    isAuthenticated: !!user,
+    login,
+    register,
+    logout,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth debe usarse dentro de <AuthProvider/>");
+  if (!ctx) throw new Error("useAuth debe usarse dentro de AuthProvider");
   return ctx;
 }

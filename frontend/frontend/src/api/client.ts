@@ -43,7 +43,12 @@ export async function listConversations(): Promise<Conversation[]> {
   const { data } = await api.get("/api/conversations");
   return Array.isArray(data) ? data : (data?.items ?? []);
 }
-
+export async function getConversations() {
+  const { data } = await api.get<{ items: Conversation[]; total: number }>(
+    "/api/conversations"
+  );
+  return data;
+}
 export async function getMessages(
   conversationId: number,
   page = 1,

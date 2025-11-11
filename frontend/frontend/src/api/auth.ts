@@ -1,3 +1,26 @@
+// frontend/src/api/auth.ts
+import { api } from "./client";
+
+export async function loginUser(email: string, password: string) {
+  const { data } = await api.post("/api/auth/login", { email, password });
+  return data; // { token, user }
+}
+
+export async function registerUser(
+  email: string,
+  password: string,
+  nombre?: string,
+  apellido?: string
+) {
+  const { data } = await api.post("/api/auth/register", {
+    email,
+    password,
+    nombre,
+    apellido,
+  });
+  return data;
+}
+
 export type AuthUser = {
   id: number;
   email: string;
