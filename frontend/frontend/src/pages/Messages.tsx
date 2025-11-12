@@ -1,3 +1,4 @@
+// frontend/src/pages/Messages.tsx
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -5,13 +6,48 @@ import {
   getMessages,
   sendMessage,
 } from "../api/client";
-import type { Conversation, Message, Paged } from "../types";
+
+// Tipos laxos para evitar errores de TS si tus types.ts difieren
+type Paged<T> = { items: T[]; total?: number; page?: number; pageSize?: number };
+
+type OtherUser = {
+  id?: number;
+  nombre?: string | null;
+  apellido?: string | null;
+  email?: string;
+};
+
+type Conversation = {
+  id: number;
+  otherUser?: OtherUser;
+  lastMessage?: { content?: string } | null;
+};
+
+type Message = {
+  id?: number;
+  content: string;
+  createdAt: string;          // ISO
+  // En algunos esquemas puede llamarse senderId/authorId/etc.
+  // Usamos any para evitar errores de tipado si tu types.ts no lo trae así:
+  fromUserId?: number;
+  toUserId?: number;
+  isMine?: boolean;
+};
+
+function toArray<T>(data: any): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === "object" && "items" in data) {
+    return (data as Paged<T>).items ?? [];
+  }
+  return [];
+}
 
 export default function Messages() {
   const { user } = useAuth();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [loadingConvs, setLoadingConvs] = useState(false);
@@ -19,172 +55,168 @@ export default function Messages() {
   const [error, setError] = useState<string | null>(null);
 
   const pollingRef = useRef<number | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
 
+  function scrollToBottom() {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  // 1) Cargar conversaciones (y seleccionar la primera si no hay selección)
   useEffect(() => {
     let alive = true;
-
-    async function loadConvs() {
+    (async () => {
       try {
         setLoadingConvs(true);
         setError(null);
         const data = await getConversations();
-        const items = Array.isArray(data)
-          ? (data as Conversation[])
-          : (data as Paged<Conversation>).items ?? [];
-        if (alive) setConversations(items);
-      } catch (err) {
-        console.error(err);
+        const items = toArray<Conversation>(data);
+
+        if (!alive) return;
+        setConversations(items);
+
+        if (items.length && selectedId == null) {
+          setSelectedId(items[0].id);
+        }
+      } catch (e) {
+        console.error(e);
         if (alive) setError("No se pudieron cargar las conversaciones");
       } finally {
         if (alive) setLoadingConvs(false);
       }
-    }
-
-    loadConvs();
+    })();
     return () => {
       alive = false;
-    };
-  }, []);
-
-  // ----- scroll al final -----
-  function scrollToBottom() {
-    if (!listRef.current) return;
-    listRef.current.scrollTop = listRef.current.scrollHeight;
-  }
-
-  // ----- cargar mensajes de una conversación -----
-  async function loadMessagesFor(conversationId: number) {
-    let alive = true;
-    try {
-      setLoadingMsgs(true);
-      setError(null);
-      const data = await getMessages(conversationId, 1, 50);
-      const items = Array.isArray(data)
-        ? (data as Message[])
-        : (data as Paged<Message>).items ?? [];
-      // marcar isMine
-      const myId = user?.id;
-      const decorated = items.map((m) => ({
-        ...m,
-        isMine: myId != null && m.senderId === myId,
-      }));
-      if (alive) setMessages(decorated);
-      scrollToBottom();
-    } catch (err) {
-      console.error(err);
-      if (alive) setError("No se pudieron cargar los mensajes");
-    } finally {
-      if (alive) setLoadingMsgs(false);
-    }
-    return () => {
-      alive = false;
-    };
-  }
-
-  // ----- polling -----
-  function stopPolling() {
-    if (pollingRef.current != null) {
-      window.clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }
-
-  function startPolling(conversationId: number) {
-    stopPolling();
-    pollingRef.current = window.setInterval(async () => {
-      try {
-        const data = await getMessages(conversationId, 1, 50);
-        const items = Array.isArray(data)
-          ? (data as Message[])
-          : (data as Paged<Message>).items ?? [];
-        const myId = user?.id;
-        const decorated = items.map((m) => ({
-          ...m,
-          isMine: myId != null && m.senderId === myId,
-        }));
-        setMessages(decorated);
-        scrollToBottom();
-      } catch (err) {
-        console.error("Error en polling de mensajes", err);
-      }
-    }, 4000); // cada 4 segundos
-  }
-
-  // ----- cuando cambia selectedId -----
-  useEffect(() => {
-    if (selectedId == null) {
-      setMessages([]);
-      stopPolling();
-      return;
-    }
-    loadMessagesFor(selectedId);
-    startPolling(selectedId);
-    return () => {
-      stopPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, []);
 
-  // ----- enviar mensaje -----
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!text.trim()) return;
+  // 2) Cargar mensajes de la conversación seleccionada
+  useEffect(() => {
     if (selectedId == null) return;
 
-    const tmp: Message = {
-      id: Date.now(),
-      conversationId: selectedId,
-      senderId: user?.id ?? 0,
-      content: text,
+    let alive = true;
+    (async () => {
+      try {
+        setLoadingMsgs(true);
+        setError(null);
+        const data = await getMessages(selectedId, 1, 50);
+        const items = toArray<Message>(data);
+
+        // Marcar isMine en UI
+        const mineId = user?.id ?? null;
+        const withMine = items.map((m) => ({
+          ...m,
+          isMine: mineId != null && (m as any).fromUserId === mineId,
+        }));
+
+        if (!alive) return;
+        setMessages(withMine);
+        scrollToBottom();
+      } catch (e) {
+        console.error(e);
+        if (alive) setError("No se pudieron cargar los mensajes");
+      } finally {
+        if (alive) setLoadingMsgs(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [selectedId, user?.id]);
+
+  // 3) Polling de nuevos mensajes cada 3s
+  useEffect(() => {
+    if (selectedId == null) return;
+
+    function stop() {
+      if (pollingRef.current != null) {
+        window.clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    }
+
+    pollingRef.current = window.setInterval(async () => {
+      try {
+        const data = await getMessages(selectedId, 1, 50);
+        const items = toArray<Message>(data);
+        const mineId = user?.id ?? null;
+
+        setMessages((prev) => {
+          const marked = items.map((m) => ({
+            ...m,
+            isMine: mineId != null && (m as any).fromUserId === mineId,
+          }));
+
+          // Actualizamos sólo si hay cambios evidentes (id del último o tamaño)
+          const prevLast = prev[prev.length - 1]?.id;
+          const newLast = marked[marked.length - 1]?.id;
+          if (prevLast !== newLast || marked.length !== prev.length) {
+            return marked;
+          }
+          return prev;
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }, 3000);
+
+    return stop;
+  }, [selectedId, user?.id]);
+
+  // 4) Envío con actualización optimista
+  async function handleSend() {
+    if (!text.trim() || selectedId == null || !user?.id) return;
+
+    const temp: Message = {
+      id: Math.floor(Math.random() * -1e9), // id temporal negativo
+      content: text.trim(),
       createdAt: new Date().toISOString(),
+      fromUserId: user.id,
+      toUserId: 0,
       isMine: true,
     };
 
-    setMessages((prev) => [...prev, tmp]);
+    // Optimismo: lo metemos ya
+    setMessages((prev) => [...prev, temp]);
     setText("");
     scrollToBottom();
 
     try {
-      const saved = await sendMessage(selectedId, tmp.content);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tmp.id ? { ...saved, isMine: true } : m))
-      );
-    } catch (err) {
-      console.error(err);
+      const saved = await sendMessage(selectedId, temp.content);
+      // Reemplazamos al final por el guardado definitivo, marcando isMine
+      setMessages((prev) => {
+        const mineId = user.id;
+        const arr = [...prev];
+        arr[arr.length - 1] = {
+          ...(saved as any),
+          isMine: (saved as any).fromUserId === mineId,
+        } as Message;
+        return arr;
+      });
+      scrollToBottom();
+    } catch (e) {
+      console.error(e);
       setError("No se pudo enviar el mensaje");
-      // opcional: deshacer el mensaje optimista
     }
   }
 
-  // ----- render -----
+  // 5) UI
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 60px)" }}>
-      {/* Lista de conversaciones */}
-      <aside
-        style={{
-          width: 280,
-          borderRight: "1px solid #e5e7eb",
-          padding: 16,
-          overflowY: "auto",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Conversaciones</h2>
-        {loadingConvs && <div>Cargando conversaciones…</div>}
-        {error && (
-          <div style={{ color: "crimson", marginBottom: 8 }}>{error}</div>
-        )}
-
+    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100vh - 64px)" }}>
+      {/* Panel izquierdo: conversaciones */}
+      <div style={{ borderRight: "1px solid #e5e7eb", overflowY: "auto" }}>
+        <div style={{ padding: 12, fontWeight: 700 }}>Conversaciones</div>
+        {loadingConvs && <div style={{ padding: 12 }}>Cargando…</div>}
         {conversations.map((c) => (
           <div
             key={c.id}
             onClick={() => setSelectedId(c.id)}
             style={{
-              padding: 8,
-              marginBottom: 8,
-              borderRadius: 8,
+              padding: 12,
               cursor: "pointer",
-              background: c.id === selectedId ? "#e5e7eb" : "transparent",
+              background: selectedId === c.id ? "#eef2ff" : "transparent",
+              borderBottom: "1px solid #f3f4f6",
             }}
           >
             <div style={{ fontWeight: 600 }}>
@@ -195,44 +227,25 @@ export default function Messages() {
             </div>
           </div>
         ))}
-      </aside>
+      </div>
 
-      {/* Panel de mensajes */}
-      <section style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <div
-          style={{
-            padding: 16,
-            borderBottom: "1px solid #e5e7eb",
-            minHeight: 56,
-          }}
-        >
-          {selectedId == null ? (
-            <strong>Seleccioná una conversación</strong>
-          ) : (
-            <strong>
-              Conversación #{selectedId}
-            </strong>
-          )}
+      {/* Panel derecho: mensajes */}
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ padding: 12, borderBottom: "1px solid #e5e7eb" }}>
+          {selectedId ? `Conversación #${selectedId}` : "Seleccioná una conversación"}
         </div>
 
-        <div
-          ref={listRef}
-          style={{
-            flex: 1,
-            padding: 16,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
+        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
           {loadingMsgs && <div>Cargando mensajes…</div>}
-          {messages.map((m) => (
+          {error && <div style={{ color: "crimson" }}>{error}</div>}
+
+          {messages.map((m, idx) => (
             <div
-              key={m.id}
+              key={m.id ?? `temp-${idx}`}
               style={{
                 display: "flex",
                 justifyContent: m.isMine ? "flex-end" : "flex-start",
+                marginBottom: 8,
               }}
             >
               <div
@@ -249,48 +262,28 @@ export default function Messages() {
               </div>
             </div>
           ))}
+          <div ref={endRef} />
         </div>
 
-        {/* Formulario de envío */}
-        {selectedId != null && (
-          <form
-            onSubmit={handleSend}
-            style={{
-              padding: 12,
-              borderTop: "1px solid #e5e7eb",
-              display: "flex",
-              gap: 8,
+        {/* input */}
+        <div style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid #e5e7eb" }}>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Escribí tu mensaje…"
+            style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #e5e7eb" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSend();
             }}
+          />
+          <button
+            onClick={handleSend}
+            style={{ background: "#2563eb", color: "#fff", border: 0, borderRadius: 8, padding: "10px 14px", cursor: "pointer" }}
           >
-            <input
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Escribí tu mensaje…"
-              style={{
-                flex: 1,
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!text.trim()}
-              style={{
-                background: "#2563eb",
-                color: "#fff",
-                border: 0,
-                borderRadius: 8,
-                padding: "0 16px",
-                cursor: "pointer",
-              }}
-            >
-              Enviar
-            </button>
-          </form>
-        )}
-      </section>
+            Enviar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

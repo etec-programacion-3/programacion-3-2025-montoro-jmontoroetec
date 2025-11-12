@@ -1,73 +1,69 @@
+// frontend/src/api/client.ts
 import axios from "axios";
-import { getToken } from "./auth"; 
-import type { Conversation, Message, Paged } from "../types";
+import { getToken } from "./auth";
+import type { Product } from "../types";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL, 
+  baseURL: import.meta.env.VITE_API_BASE_URL, // ej: http://localhost:3000
   headers: { "Content-Type": "application/json" },
 });
 
 api.interceptors.request.use((config) => {
-  const token = getToken?.(); 
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const t = getToken();
+  if (t) config.headers.Authorization = `Bearer ${t}`;
   return config;
 });
 
-
+// ---------- Productos ----------
 export async function fetchProducts(params?: {
   page?: number;
   pageSize?: number;
   categoryId?: number;
 }) {
-  const q = new URLSearchParams();
-  if (params?.page) q.set("page", String(params.page));
-  if (params?.pageSize) q.set("pageSize", String(params.pageSize));
-  if (params?.categoryId) q.set("categoryId", String(params.categoryId));
+  const { data } = await api.get("/api/products", { params });
 
-  const url = `/api/products${q.toString() ? `?${q.toString()}` : ""}`;
-  const { data } = await api.get(url);
-  return data;
+  if (Array.isArray(data)) return { items: data, meta: undefined };
+  if (data && Array.isArray(data.items)) return { items: data.items, meta: data.meta };
+  if (data && Array.isArray(data.data)) return { items: data.data, meta: data.meta };
+
+  return { items: [], meta: undefined };
 }
 
-export async function fetchProductById(id: number) {
+export async function fetchProductById(id: number): Promise<Product | null> {
   const { data } = await api.get(`/api/products/${id}`);
-  return data;
+
+  // Normalizaciones típicas de backends
+  // 1) { id, nombre, ... }
+  if (data && typeof data === "object" && "id" in data) {
+    return data as Product;
+  }
+  // 2) { product: {...} }
+  if (data?.product && typeof data.product === "object") {
+    return data.product as Product;
+  }
+  // 3) { data: {...} }
+  if (data?.data && typeof data.data === "object") {
+    return data.data as Product;
+  }
+  return null;
 }
 
+// ---------- Conversaciones / Mensajes ----------
+export async function getConversations(page = 1, pageSize = 50) {
+  const { data } = await api.get("/api/conversations", { params: { page, pageSize } });
+  return data;
+}
+export async function getMessages(conversationId: number, page = 1, pageSize = 50) {
+  const { data } = await api.get(`/api/conversations/${conversationId}/messages`, {
+    params: { page, pageSize },
+  });
+  return data;
+}
+export async function sendMessage(conversationId: number, content: string) {
+  const { data } = await api.post(`/api/conversations/${conversationId}/messages`, { content });
+  return data;
+}
 export async function startConversation(otherUserId: number) {
-  const { data } = await api.post("/api/conversations", { otherUserId });
-  return data; 
-}
-
-export async function listConversations(): Promise<Conversation[]> {
-  const { data } = await api.get("/api/conversations");
-  return Array.isArray(data) ? data : (data?.items ?? []);
-}
-export async function getConversations() {
-  const { data } = await api.get<{ items: Conversation[]; total: number }>(
-    "/api/conversations"
-  );
-  return data;
-}
-export async function getMessages(
-  conversationId: number,
-  page = 1,
-  pageSize = 50
-): Promise<Message[] | Paged<Message>> {
-  const { data } = await api.get(
-    `/api/conversations/${conversationId}/messages`,
-    { params: { page, pageSize } }
-  );
-  return data;
-}
-
-export async function sendMessage(
-  conversationId: number,
-  content: string
-): Promise<Message> {
-  const { data } = await api.post(
-    `/api/conversations/${conversationId}/messages`,
-    { content }
-  );
+  const { data } = await api.post(`/api/conversations`, { otherUserId });
   return data;
 }
