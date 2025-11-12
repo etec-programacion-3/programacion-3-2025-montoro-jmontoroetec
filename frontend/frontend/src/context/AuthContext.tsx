@@ -1,91 +1,109 @@
-// frontend/frontend/src/context/AuthContext.tsx
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+// frontend/src/context/AuthContext.tsx
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   apiLogin,
   apiRegister,
-  type AuthUser,
-  type LoginPayload,
-  type RegisterPayload,
+  clearToken,
+  decodeToken,
   getStoredUser,
   setStoredUser,
   setToken,
-  clearToken,
+  type AuthUser,
+  type RegisterPayload,
 } from "../api/auth";
 
 export interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  isAuthenticated: boolean;
-  login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterPayload) => Promise<void>;
   logout: () => void;
+  isAuthenticated: boolean;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  loading: false,
+  login: async () => {},
+  register: async () => {},
+  logout: () => {},
+  isAuthenticated: false,
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [loading, setLoading] = useState(false);
 
-  // leer usuario almacenado al inicio
+  // hidratar desde token guardado (si no hay usuario en storage)
   useEffect(() => {
-    const stored = getStoredUser();
-    if (stored) {
-      setUser(stored);
+    if (!user) {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const { userId, email } = decodeToken(token);
+        if (userId && email) {
+          const u: AuthUser = { id: userId, email };
+          setUser(u);
+          setStoredUser(u);
+        }
+      }
     }
-    setLoading(false);
   }, []);
 
-  const login = async (payload: LoginPayload) => {
+  async function login(email: string, password: string) {
     setLoading(true);
     try {
-      const { token, user } = await apiLogin(payload);
+      const { token, user: serverUser } = await apiLogin({ email, password });
       setToken(token);
-      setStoredUser(user);
-      setUser(user);
+
+      if (serverUser) {
+        setStoredUser(serverUser);
+        setUser(serverUser);
+      } else {
+        const { userId, email: e } = decodeToken(token);
+        const u: AuthUser = { id: userId ?? 0, email: e ?? email };
+        setStoredUser(u);
+        setUser(u);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const register = async (payload: RegisterPayload) => {
+  async function register(data: RegisterPayload) {
     setLoading(true);
     try {
-      const { token, user } = await apiRegister(payload);
+      const { token, user: serverUser } = await apiRegister(data);
       setToken(token);
-      setStoredUser(user);
-      setUser(user);
+
+      if (serverUser) {
+        setStoredUser(serverUser);
+        setUser(serverUser);
+      } else {
+        const { userId, email } = decodeToken(token);
+        const u: AuthUser = { id: userId ?? 0, email: email ?? data.email };
+        setStoredUser(u);
+        setUser(u);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const logout = () => {
+  function logout() {
     clearToken();
     setStoredUser(null);
     setUser(null);
-  };
+  }
 
-  const value: AuthContextValue = {
-    user,
-    loading,
-    isAuthenticated: !!user,
-    login,
-    register,
-    logout,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, isAuthenticated: !!user }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth debe usarse dentro de AuthProvider");
-  return ctx;
+export function useAuth() {
+  return useContext(AuthContext);
 }

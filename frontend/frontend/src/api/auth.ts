@@ -1,26 +1,6 @@
 // frontend/src/api/auth.ts
 import { api } from "./client";
 
-export async function loginUser(email: string, password: string) {
-  const { data } = await api.post("/api/auth/login", { email, password });
-  return data; // { token, user }
-}
-
-export async function registerUser(
-  email: string,
-  password: string,
-  nombre?: string,
-  apellido?: string
-) {
-  const { data } = await api.post("/api/auth/register", {
-    email,
-    password,
-    nombre,
-    apellido,
-  });
-  return data;
-}
-
 export type AuthUser = {
   id: number;
   email: string;
@@ -37,7 +17,7 @@ export type RegisterPayload = {
 };
 
 const LS_TOKEN_KEY = "token";
-const LS_USER_KEY = "authUser";
+const LS_USER_KEY  = "authUser";
 
 export function setToken(token: string) {
   localStorage.setItem(LS_TOKEN_KEY, token);
@@ -54,21 +34,27 @@ export function setStoredUser(u: AuthUser | null) {
 }
 export function getStoredUser(): AuthUser | null {
   const raw = localStorage.getItem(LS_USER_KEY);
+  try { return raw ? (JSON.parse(raw) as AuthUser) : null; } catch { return null; }
+}
+
+// Decodifica JWT sin validar firma (solo para hidratar UI)
+export function decodeToken(token: string): { userId?: number; email?: string } {
   try {
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
+    const [, payloadB64] = token.split(".");
+    const json = atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(json);
+  } catch { return {}; }
 }
 
 export async function apiLogin(payload: LoginPayload) {
+  // tu backend responde { token } o { token, user }
   const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("Credenciales inválidas");
-  return (await res.json()) as { token: string; user: AuthUser };
+  return (await res.json()) as { token: string; user?: AuthUser };
 }
 
 export async function apiRegister(payload: RegisterPayload) {
@@ -78,6 +64,5 @@ export async function apiRegister(payload: RegisterPayload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("No se pudo registrar");
-  return (await res.json()) as { token: string; user: AuthUser };
+  return (await res.json()) as { token: string; user?: AuthUser };
 }
-

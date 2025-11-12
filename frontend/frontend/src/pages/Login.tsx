@@ -1,13 +1,11 @@
-// frontend/frontend/src/pages/Login.tsx
-import type { FormEvent } from "react";
-import { useState } from "react";
+// frontend/src/pages/Login.tsx
+import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const { login, loading } = useAuth();
   const nav = useNavigate();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -16,8 +14,7 @@ export default function Login() {
     e.preventDefault();
     setErr(null);
     try {
-      // 👇 ahora login recibe UN objeto { email, password }
-      await login({ email, password });
+      await login(email, password);
       nav("/", { replace: true });
     } catch (e: any) {
       console.error(e);
@@ -28,39 +25,28 @@ export default function Login() {
   return (
     <div style={{ padding: 24, maxWidth: 420 }}>
       <h2>Iniciar sesión</h2>
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
-
+      {err && <div style={{ color: "crimson", marginBottom: 12 }}>{err}</div>}
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <label>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <label>
-          Contraseña
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            style={{ width: "100%" }}
-          />
-        </label>
-
-        <button type="submit" disabled={loading}>
-          {loading ? "Ingresando..." : "Entrar"}
+        <input
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="username"
+        />
+        <input
+          placeholder="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
+        <button disabled={loading} type="submit">
+          {loading ? "Ingresando…" : "Entrar"}
         </button>
       </form>
-
-      <p style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 12 }}>
         ¿No tenés cuenta? <Link to="/register">Registrate</Link>
-      </p>
+      </div>
     </div>
   );
 }
