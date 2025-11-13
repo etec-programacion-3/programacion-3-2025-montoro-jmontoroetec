@@ -1,0 +1,105 @@
+### VARIABLES GLOBALES ########################################################
+
+@baseUrl = http://localhost:3000
+@token = PONER_ACÁ_EL_TOKEN_JWT
+
+###############################################################################
+### 1) AUTENTICACIÓN
+###############################################################################
+
+### 1.1 Registro de usuario
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "juan@example.com",
+  "password": "123456",
+  "nombre": "Juan",
+  "apellido": "Prueba"
+}
+
+### 1.2 Login de usuario
+# Copiar el "token" del response y pegarlo en la variable @token de arriba
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "juan@example.com",
+  "password": "123456"
+}
+
+### 1.3 Obtener usuario autenticado (perfil)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{token}}
+
+###############################################################################
+### 2) PRODUCTOS (CRUD)
+###############################################################################
+
+### 2.1 Listado de productos (paginado)
+GET {{baseUrl}}/api/products?page=1&pageSize=12
+
+### 2.2 Crear un producto (requiere token)
+POST {{baseUrl}}/api/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Cafetera Express",
+  "descripcion": "Cafetera automática de acero inoxidable",
+  "precio": 129999,
+  "stock": 10,
+  "categoriaIds": [1]   // Ajustar según IDs reales de categorías
+}
+
+### 2.3 Obtener detalle de un producto por ID
+GET {{baseUrl}}/api/products/1
+
+### 2.4 Actualizar un producto (requiere token)
+PUT {{baseUrl}}/api/products/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Cafetera Express Actualizada",
+  "descripcion": "Descripción actualizada",
+  "precio": 139999,
+  "stock": 8
+}
+
+### 2.5 Eliminar un producto (requiere token)
+DELETE {{baseUrl}}/api/products/1
+Authorization: Bearer {{token}}
+
+###############################################################################
+### 3) CONVERSACIONES Y MENSAJES
+###############################################################################
+
+### 3.1 Listar conversaciones del usuario autenticado
+GET {{baseUrl}}/api/conversations
+Authorization: Bearer {{token}}
+
+### 3.2 Crear una conversación con otro usuario
+# Cambiar otherUserId por el ID real del otro usuario
+POST {{baseUrl}}/api/conversations
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "otherUserId": 2
+}
+
+### 3.3 Listar mensajes de una conversación (paginado)
+# Cambiar :id por el ID de la conversación (por ejemplo 1)
+GET {{baseUrl}}/api/conversations/1/messages?page=1&pageSize=50
+Authorization: Bearer {{token}}
+
+### 3.4 Enviar mensaje en una conversación
+POST {{baseUrl}}/api/conversations/1/messages
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "content": "Hola, ¿cómo estás?"
+}
+
