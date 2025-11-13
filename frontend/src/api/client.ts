@@ -1,10 +1,9 @@
-// frontend/src/api/client.ts
 import axios from "axios";
 import { getToken } from "./auth";
 import type { Product } from "../types";
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL, // ej: http://localhost:3000
+  baseURL: import.meta.env.VITE_API_BASE_URL, 
   headers: { "Content-Type": "application/json" },
 });
 
@@ -14,7 +13,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// ---------- Productos ----------
 export async function fetchProducts(params?: {
   page?: number;
   pageSize?: number;
@@ -32,23 +30,18 @@ export async function fetchProducts(params?: {
 export async function fetchProductById(id: number): Promise<Product | null> {
   const { data } = await api.get(`/api/products/${id}`);
 
-  // Normalizaciones típicas de backends
-  // 1) { id, nombre, ... }
   if (data && typeof data === "object" && "id" in data) {
     return data as Product;
   }
-  // 2) { product: {...} }
   if (data?.product && typeof data.product === "object") {
     return data.product as Product;
   }
-  // 3) { data: {...} }
   if (data?.data && typeof data.data === "object") {
     return data.data as Product;
   }
   return null;
 }
 
-// ---------- Conversaciones / Mensajes ----------
 export async function getConversations(page = 1, pageSize = 50) {
   const { data } = await api.get("/api/conversations", { params: { page, pageSize } });
   return data;

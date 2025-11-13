@@ -1,4 +1,3 @@
-// frontend/src/context/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   apiLogin,
@@ -34,7 +33,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
   const [loading, setLoading] = useState(false);
 
-  // hidratar desde token guardado (si no hay usuario en storage)
   useEffect(() => {
     if (!user) {
       const token = localStorage.getItem("token");

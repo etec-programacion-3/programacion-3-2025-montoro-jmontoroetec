@@ -18,7 +18,6 @@ router.post("/", async (req: Request<unknown, unknown, CreateCategoryBody>, res:
     return res.status(201).json(cat);
   } catch (e: any) {
     if (e?.code === "P2002") {
-      // unique constraint
       return res.status(409).json({ error: "La categoría ya existe" });
     }
     console.error("POST /categories error:", e);

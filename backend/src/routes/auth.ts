@@ -2,16 +2,14 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import prisma from "../prisma";
 
-// 👇 Import compatible con ESM para jsonwebtoken
 import pkg from "jsonwebtoken";
-const { sign, verify } = pkg as any;  // usamos desestructuración
+const { sign, verify } = pkg as any;  
 
 const router = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || "defaultsecret";
 const SALT_ROUNDS = 10;
 
-// REGISTER
 router.post("/register", async (req, res) => {
   try {
     const { email, password, nombre, apellido } = req.body;
@@ -41,7 +39,6 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// LOGIN
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -55,7 +52,6 @@ router.post("/login", async (req, res) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: "Credenciales inválidas" });
 
-    // 👇 generamos token con sign (ya no rompe)
     const token = sign(
       { userId: user.id, email: user.email },
       JWT_SECRET,
@@ -69,7 +65,6 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// PROTECTED ROUTE: /me
 router.get("/me", async (req, res) => {
   try {
     const auth = req.headers.authorization;

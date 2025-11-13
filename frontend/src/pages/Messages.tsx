@@ -1,9 +1,7 @@
-// frontend/src/pages/Messages.tsx
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { getConversations, getMessages, sendMessage } from "../api/client";
 
-// ---------------- Tipos ----------------
 
 type Paged<T> = { items: T[]; total?: number; page?: number; pageSize?: number };
 
@@ -35,7 +33,6 @@ type RawConversation = {
   messages?: { content: string }[];
 };
 
-// ---------------- Utils ----------------
 
 function toArray<T>(data: any): T[] {
   if (Array.isArray(data)) return data as T[];
@@ -45,12 +42,10 @@ function toArray<T>(data: any): T[] {
   return [];
 }
 
-// Obtiene el id del remitente sin importar cómo venga llamado
 function getSenderId(m: any): number | undefined {
   return m?.fromUserId ?? m?.senderId ?? m?.authorId ?? m?.userId;
 }
 
-// ---------------- Componente ----------------
 
 export default function Messages() {
   const { user } = useAuth();
@@ -71,7 +66,6 @@ export default function Messages() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
-  // 1) Cargar conversaciones y mapear otherUser + lastMessage
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -123,10 +117,8 @@ export default function Messages() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // 2) Cargar mensajes de la conversación seleccionada
   useEffect(() => {
     if (selectedId == null) return;
 
@@ -163,7 +155,6 @@ export default function Messages() {
     };
   }, [selectedId, user?.id]);
 
-  // 3) Polling cada 3s
   useEffect(() => {
     if (selectedId == null) return;
 
@@ -204,7 +195,6 @@ export default function Messages() {
     return stop;
   }, [selectedId, user?.id]);
 
-  // 4) Envío optimista
   async function handleSend() {
     if (!text.trim() || selectedId == null || !user?.id) return;
 
@@ -212,7 +202,7 @@ export default function Messages() {
       id: Math.floor(Math.random() * -1e9),
       content: text.trim(),
       createdAt: new Date().toISOString(),
-      fromUserId: user.id, // optimista
+      fromUserId: user.id, 
       toUserId: 0,
       isMine: true,
     };
@@ -254,7 +244,6 @@ export default function Messages() {
     return `Conversación #${selectedId}`;
   })();
 
-  // ---------------- UI ----------------
 
   return (
     <div

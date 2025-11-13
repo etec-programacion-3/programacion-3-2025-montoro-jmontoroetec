@@ -1,4 +1,3 @@
-// frontend/src/pages/Register.tsx
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -25,7 +24,6 @@ export default function Register() {
     setError(null);
     try {
       await doRegister(form);
-      // si preferís entrar directo a la app, reemplazá por navigate("/")
       navigate("/login", { replace: true });
     } catch (err: any) {
       console.error(err);

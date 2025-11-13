@@ -1,6 +1,3 @@
-// frontend/frontend/src/types.ts
-
-// ---------- Productos ----------
 export interface Category {
   id: number;
   nombre: string;
@@ -24,7 +21,6 @@ export interface Product {
   categories?: Category[];
 }
 
-// ---------- Paginación genérica ----------
 export interface Paged<T> {
   items: T[];
   page: number;
@@ -33,12 +29,10 @@ export interface Paged<T> {
   totalPages: number;
 }
 
-// ---------- Chat / Mensajes ----------
 export interface Conversation {
   id: number;
   createdAt: string;
   updatedAt: string;
-  // usuario "del otro lado" calculado en backend o frontend
   otherUser?: {
     id: number;
     nombre?: string;
