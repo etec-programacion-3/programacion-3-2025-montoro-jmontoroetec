@@ -1,4 +1,3 @@
-// frontend/src/api/auth.ts
 import { api } from "./client";
 
 export type AuthUser = {
@@ -37,7 +36,6 @@ export function getStoredUser(): AuthUser | null {
   try { return raw ? (JSON.parse(raw) as AuthUser) : null; } catch { return null; }
 }
 
-// Decodifica JWT sin validar firma (solo para hidratar UI)
 export function decodeToken(token: string): { userId?: number; email?: string } {
   try {
     const [, payloadB64] = token.split(".");
@@ -47,7 +45,6 @@ export function decodeToken(token: string): { userId?: number; email?: string } 
 }
 
 export async function apiLogin(payload: LoginPayload) {
-  // tu backend responde { token } o { token, user }
   const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

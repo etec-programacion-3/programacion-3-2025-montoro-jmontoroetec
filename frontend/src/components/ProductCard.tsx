@@ -1,4 +1,3 @@
-// frontend/src/components/ProductCard.tsx
 import { Link } from "react-router-dom";
 
 type Category = { id: number; nombre: string };

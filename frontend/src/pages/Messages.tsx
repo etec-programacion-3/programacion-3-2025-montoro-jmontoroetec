@@ -1,13 +1,8 @@
-// frontend/src/pages/Messages.tsx
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import {
-  getConversations,
-  getMessages,
-  sendMessage,
-} from "../api/client";
+import { getConversations, getMessages, sendMessage } from "../api/client";
 
-// Tipos laxos para evitar errores de TS si tus types.ts difieren
+
 type Paged<T> = { items: T[]; total?: number; page?: number; pageSize?: number };
 
 type OtherUser = {
@@ -26,13 +21,18 @@ type Conversation = {
 type Message = {
   id?: number;
   content: string;
-  createdAt: string;          // ISO
-  // En algunos esquemas puede llamarse senderId/authorId/etc.
-  // Usamos any para evitar errores de tipado si tu types.ts no lo trae así:
+  createdAt: string;
   fromUserId?: number;
   toUserId?: number;
   isMine?: boolean;
 };
+
+type RawConversation = {
+  id: number;
+  participants?: { user?: OtherUser }[];
+  messages?: { content: string }[];
+};
+
 
 function toArray<T>(data: any): T[] {
   if (Array.isArray(data)) return data as T[];
@@ -41,6 +41,11 @@ function toArray<T>(data: any): T[] {
   }
   return [];
 }
+
+function getSenderId(m: any): number | undefined {
+  return m?.fromUserId ?? m?.senderId ?? m?.authorId ?? m?.userId;
+}
+
 
 export default function Messages() {
   const { user } = useAuth();
@@ -61,21 +66,45 @@ export default function Messages() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
-  // 1) Cargar conversaciones (y seleccionar la primera si no hay selección)
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoadingConvs(true);
         setError(null);
+
         const data = await getConversations();
-        const items = toArray<Conversation>(data);
+        const rawItems = toArray<RawConversation>(data);
+
+        const myId = user?.id ?? null;
+
+        const mapped: Conversation[] = rawItems.map((c) => {
+          const participants = c.participants ?? [];
+          const users = participants
+            .map((p) => p.user)
+            .filter((u): u is OtherUser => !!u);
+
+          let other: OtherUser | undefined;
+          if (myId != null && users.length > 1) {
+            other = users.find((u) => u.id !== myId) ?? users[0];
+          } else {
+            other = users[0];
+          }
+
+          const last = (c.messages && c.messages[0]) || null;
+
+          return {
+            id: c.id,
+            otherUser: other,
+            lastMessage: last ? { content: last.content } : undefined,
+          };
+        });
 
         if (!alive) return;
-        setConversations(items);
+        setConversations(mapped);
 
-        if (items.length && selectedId == null) {
-          setSelectedId(items[0].id);
+        if (mapped.length && selectedId == null) {
+          setSelectedId(mapped[0].id);
         }
       } catch (e) {
         console.error(e);
@@ -84,13 +113,12 @@ export default function Messages() {
         if (alive) setLoadingConvs(false);
       }
     })();
+
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]);
 
-  // 2) Cargar mensajes de la conversación seleccionada
   useEffect(() => {
     if (selectedId == null) return;
 
@@ -102,12 +130,14 @@ export default function Messages() {
         const data = await getMessages(selectedId, 1, 50);
         const items = toArray<Message>(data);
 
-        // Marcar isMine en UI
         const mineId = user?.id ?? null;
-        const withMine = items.map((m) => ({
-          ...m,
-          isMine: mineId != null && (m as any).fromUserId === mineId,
-        }));
+        const withMine = items.map((m) => {
+          const senderId = getSenderId(m as any);
+          return {
+            ...m,
+            isMine: mineId != null && senderId === mineId,
+          };
+        });
 
         if (!alive) return;
         setMessages(withMine);
@@ -125,7 +155,6 @@ export default function Messages() {
     };
   }, [selectedId, user?.id]);
 
-  // 3) Polling de nuevos mensajes cada 3s
   useEffect(() => {
     if (selectedId == null) return;
 
@@ -143,12 +172,14 @@ export default function Messages() {
         const mineId = user?.id ?? null;
 
         setMessages((prev) => {
-          const marked = items.map((m) => ({
-            ...m,
-            isMine: mineId != null && (m as any).fromUserId === mineId,
-          }));
+          const marked = items.map((m) => {
+            const senderId = getSenderId(m as any);
+            return {
+              ...m,
+              isMine: mineId != null && senderId === mineId,
+            };
+          });
 
-          // Actualizamos sólo si hay cambios evidentes (id del último o tamaño)
           const prevLast = prev[prev.length - 1]?.id;
           const newLast = marked[marked.length - 1]?.id;
           if (prevLast !== newLast || marked.length !== prev.length) {
@@ -164,33 +195,31 @@ export default function Messages() {
     return stop;
   }, [selectedId, user?.id]);
 
-  // 4) Envío con actualización optimista
   async function handleSend() {
     if (!text.trim() || selectedId == null || !user?.id) return;
 
     const temp: Message = {
-      id: Math.floor(Math.random() * -1e9), // id temporal negativo
+      id: Math.floor(Math.random() * -1e9),
       content: text.trim(),
       createdAt: new Date().toISOString(),
-      fromUserId: user.id,
+      fromUserId: user.id, 
       toUserId: 0,
       isMine: true,
     };
 
-    // Optimismo: lo metemos ya
     setMessages((prev) => [...prev, temp]);
     setText("");
     scrollToBottom();
 
     try {
       const saved = await sendMessage(selectedId, temp.content);
-      // Reemplazamos al final por el guardado definitivo, marcando isMine
       setMessages((prev) => {
         const mineId = user.id;
         const arr = [...prev];
+        const senderId = getSenderId(saved as any);
         arr[arr.length - 1] = {
           ...(saved as any),
-          isMine: (saved as any).fromUserId === mineId,
+          isMine: senderId === mineId,
         } as Message;
         return arr;
       });
@@ -201,38 +230,71 @@ export default function Messages() {
     }
   }
 
-  // 5) UI
+  const currentConv = conversations.find((c) => c.id === selectedId);
+
+  const headerTitle = (() => {
+    if (!selectedId) return "Seleccioná una conversación";
+
+    const other = currentConv?.otherUser;
+    if (other) {
+      const fullName = `${other.nombre ?? ""} ${other.apellido ?? ""}`.trim();
+      if (fullName) return fullName;
+      if (other.email) return other.email;
+    }
+    return `Conversación #${selectedId}`;
+  })();
+
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "calc(100vh - 64px)" }}>
-      {/* Panel izquierdo: conversaciones */}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "320px 1fr",
+        height: "calc(100vh - 64px)",
+      }}
+    >
+      {/* Lista de conversaciones */}
       <div style={{ borderRight: "1px solid #e5e7eb", overflowY: "auto" }}>
         <div style={{ padding: 12, fontWeight: 700 }}>Conversaciones</div>
         {loadingConvs && <div style={{ padding: 12 }}>Cargando…</div>}
-        {conversations.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => setSelectedId(c.id)}
-            style={{
-              padding: 12,
-              cursor: "pointer",
-              background: selectedId === c.id ? "#eef2ff" : "transparent",
-              borderBottom: "1px solid #f3f4f6",
-            }}
-          >
-            <div style={{ fontWeight: 600 }}>
-              {c.otherUser?.nombre} {c.otherUser?.apellido}
+        {conversations.map((c) => {
+          const other = c.otherUser;
+          const labelName =
+            (other &&
+              (`${other.nombre ?? ""} ${other.apellido ?? ""}`.trim() ||
+                other.email)) ||
+            `Conversación #${c.id}`;
+
+          return (
+            <div
+              key={c.id}
+              onClick={() => setSelectedId(c.id)}
+              style={{
+                padding: 12,
+                cursor: "pointer",
+                background: selectedId === c.id ? "#eef2ff" : "transparent",
+                borderBottom: "1px solid #f3f4f6",
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>{labelName}</div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                {c.lastMessage?.content || "Sin mensajes aún"}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>
-              {c.lastMessage?.content || "Sin mensajes aún"}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Panel derecho: mensajes */}
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ padding: 12, borderBottom: "1px solid #e5e7eb" }}>
-          {selectedId ? `Conversación #${selectedId}` : "Seleccioná una conversación"}
+        <div
+          style={{
+            padding: 12,
+            borderBottom: "1px solid #e5e7eb",
+            fontWeight: 600,
+          }}
+        >
+          {headerTitle}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
@@ -265,20 +327,39 @@ export default function Messages() {
           <div ref={endRef} />
         </div>
 
-        {/* input */}
-        <div style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid #e5e7eb" }}>
+        {/* Input */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            padding: 12,
+            borderTop: "1px solid #e5e7eb",
+          }}
+        >
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Escribí tu mensaje…"
-            style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #e5e7eb" }}
+            style={{
+              flex: 1,
+              padding: 10,
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSend();
             }}
           />
           <button
             onClick={handleSend}
-            style={{ background: "#2563eb", color: "#fff", border: 0, borderRadius: 8, padding: "10px 14px", cursor: "pointer" }}
+            style={{
+              background: "#2563eb",
+              color: "#fff",
+              border: 0,
+              borderRadius: 8,
+              padding: "10px 14px",
+              cursor: "pointer",
+            }}
           >
             Enviar
           </button>

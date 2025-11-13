@@ -1,4 +1,3 @@
-// frontend/frontend/src/App.tsx
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import Home from "./pages/Home";
 import Login from "./pages/Login";

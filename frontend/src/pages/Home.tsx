@@ -1,4 +1,3 @@
-// frontend/src/pages/Home.tsx
 import { useEffect, useState } from "react";
 import ProductCard from "../components/ProductCard";
 import { fetchProducts } from "../api/client";
@@ -17,7 +16,6 @@ export default function Home() {
         setLoading(true);
         setError(null);
 
-        // page=1, pageSize=12 por defecto
         const resp = await fetchProducts({ page: 1, pageSize: 12 });
         const items = resp?.items ?? [];
 

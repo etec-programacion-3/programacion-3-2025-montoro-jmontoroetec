@@ -1,4 +1,3 @@
-// frontend/src/pages/ProductDetail.tsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { fetchProductById, startConversation } from "../api/client";
@@ -41,7 +40,6 @@ export default function ProductDetail() {
       setContacting(true);
       const resp = await startConversation(Number(sellerId));
       alert(resp?.existing ? "Ya existe una conversación (abrir chat)" : "Conversación creada (abrir chat)");
-      // Podrías navigate(`/messages?c=${resp.conversation.id}`)
     } catch (e) {
       console.error(e);
       alert("No se pudo iniciar la conversación");
