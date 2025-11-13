@@ -35,7 +35,7 @@ JWT_SECRET="clave_super_segura"
 
  2. Levantar la Base de Datos (PostgreSQL con Docker)
 
-Dentro de la carpeta backend, ejecutar:
+Dentro de la raiz, ejecutar:
 
 docker compose up -d
 
