@@ -1,3 +1,4 @@
+JAVIER MONTORO
 Proyecto Ecommerce + Chat (Frontend + Backend + Docker + PostgreSQL)
 Este proyecto consiste en una aplicación full-stack que incluye:
 
