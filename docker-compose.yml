@@ -8,10 +8,26 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: ecommerce
-    ports:
-      - "5432:5432"
+    # NO expone puertos al host, solo internamente en la red de docker
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ecommerce?schema=public
+      - PORT=3000
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "80:80" # Único puerto expuesto en todo el docker-compose
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
